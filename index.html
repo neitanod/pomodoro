@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temporizador de Cuenta Regresiva Personalizado</title>
+</head>
+<body>
+  <h1>Temporizador de Cuenta Regresiva</h1>
+  <div id="setup">
+    <label for="eventName">Nombre del evento:</label>
+    <input type="text" id="eventName" placeholder="Introduce el nombre del evento"><br><br>
+    
+    <label for="days">Días:</label>
+    <input type="number" id="days" min="0" value="0"><br>
+    <label for="hours">Horas:</label>
+    <input type="number" id="hours" min="0" value="0"><br>
+    <label for="minutes">Minutos:</label>
+    <input type="number" id="minutes" min="0" value="0"><br>
+    <label for="seconds">Segundos:</label>
+    <input type="number" id="seconds" min="0" value="0"><br><br>
+
+    <label for="specificDate">O introduce una fecha y hora específica:</label>
+    <input type="datetime-local" id="specificDate"><br><br>
+    
+    <button onclick="startCountdown()">Comenzar</button>
+  <br><br>
+    <label for="announceWithVoice">Anunciar con voz:</label>
+    <input type="checkbox" id="announceWithVoice" checked><br><br>
+
+    <label for="minuteAnnouncement">Mensaje para cada minuto:</label>
+    <input type="text" id="minuteAnnouncement" value="[EVENTO] comenzará en [FALTANTE]."><br><br>
+
+    <label for="finalAnnouncement">Mensaje al final:</label>
+    <input type="text" id="finalAnnouncement" value="Llegó la hora de [EVENTO]."><br><br>
+  </div>
+  <button id="saveButton" onclick="saveTimer(timerData)">Guardar Temporizador</button>
+  <button id="backButton" onclick="resetCountdown()" style="display: none;">Volver</button>
+  <p id="timer">Tiempo restante: </p>
+
+  <script>
+    let countdownInterval;
+    let timerData = {}; // Objeto global para almacenar los datos del formulario
+
+    function startCountdown() {
+      timerData = loadFormData();
+      document.getElementById('setup').style.display = 'none';
+      document.querySelector('h1').style.display = 'none';
+      document.getElementById('backButton').style.display = 'block';
+      const { eventName, days, hours, minutes, seconds, specificDate } = timerData;
+
+      let endTime;
+
+      if (specificDate) {
+        endTime = new Date(specificDate).getTime();
+      } else {
+        const currentTime = new Date().getTime();
+        endTime = currentTime + (days * 24 * 60 * 60 * 1000) + (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000);
+      }
+
+      if (isNaN(endTime) || endTime <= new Date().getTime()) {
+        alert('Por favor, introduce un tiempo válido.');
+        return;
+      }
+
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      countdownInterval = setInterval(() => {
+        const now = new Date().getTime();
+        const distance = endTime - now;
+
+        const remainingDays = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const remainingHours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const remainingSeconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        let timeString = "";
+        if (remainingDays > 0) {
+          timeString += `${remainingDays} ${remainingDays === 1 ? 'día' : 'días'} `;
+        }
+        if (remainingHours > 0 || remainingDays > 0) {
+          timeString += `${remainingHours} ${remainingHours === 1 ? 'hora' : 'horas'} `;
+        }
+        if (remainingMinutes > 0 || remainingHours > 0 || remainingDays > 0) {
+          timeString += `${remainingMinutes} ${remainingMinutes === 1 ? 'minuto' : 'minutos'} `;
+        }
+        timeString += `${remainingSeconds}s para ${eventName}`;
+        
+        document.getElementById("timer").textContent = "Tiempo restante: " + timeString;
+        document.title = timeString;
+
+        if (remainingSeconds === 0 && (remainingMinutes > 0 || remainingHours > 0 || remainingDays > 0)) {
+          playBeep();
+          announceTime(remainingDays, remainingHours, remainingMinutes, eventName);
+        }
+
+        if (distance < 0) {
+          clearInterval(countdownInterval);
+          const { finalAnnouncementTemplate, announceWithVoice } = timerData;
+          const finalMessage = finalAnnouncementTemplate.replace(/\[EVENTO\]/g, eventName);
+          document.getElementById("timer").textContent = "¡" + finalMessage + "!";
+          document.title = "¡" + finalMessage + "!";
+          if (announceWithVoice) {
+            const utterance = new SpeechSynthesisUtterance(finalMessage);
+            utterance.lang = "es-ES";
+            speechSynthesis.speak(utterance);
+          }
+          startAlarm();
+        }
+      }, 1000);
+    }
+
+    function announceTime(days, hours, minutes, eventName) {
+      const { announceWithVoice, minuteAnnouncementTemplate } = timerData;
+      
+      let message;
+
+      const remainingTime = `${days > 0 ? days + ' ' + (days === 1 ? 'día' : 'días') + ', ' : ''}${hours > 0 ? hours + ' ' + (hours === 1 ? 'hora' : 'horas') + ', ' : ''}${minutes > 0 ? minutes + ' ' + (minutes === 1 ? 'minuto' : 'minutos') : ''}`;
+      message = minuteAnnouncementTemplate.replace(/\[FALTANTE\]/g, remainingTime).replace(/\[EVENTO\]/g, eventName);
+
+      if (announceWithVoice) {
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.lang = "es-ES";
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    function resetCountdown() {
+      updateForm(timerData);
+      clearInterval(countdownInterval);
+      document.getElementById('timer').textContent = 'Tiempo restante: ';
+      document.title = 'Temporizador de Cuenta Regresiva Personalizado';
+      document.getElementById('setup').style.display = 'block';
+      document.querySelector('h1').style.display = 'block';
+      document.getElementById('backButton').style.display = 'none';
+    }
+
+    function playBeep() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(3000, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.05);
+    }
+
+    function startAlarm() {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      const playBeep = function() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(3000, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.05);
+      }
+
+      const playFourBeeps = function() {
+        playBeep();
+        setTimeout(playBeep, 100);
+        setTimeout(playBeep, 200);
+        setTimeout(playBeep, 300);
+      }
+
+      let count = 0;
+      const intervalId = setInterval(() => {
+        playFourBeeps();
+        count++;
+        if (count === 4) {
+          clearInterval(intervalId);
+        }
+      }, 1000);
+    }
+
+    function loadFormData() {
+      const data = {
+        eventName: document.getElementById('eventName').value || "el evento",
+        days: parseInt(document.getElementById('days').value) || 0,
+        hours: parseInt(document.getElementById('hours').value) || 0,
+        minutes: parseInt(document.getElementById('minutes').value) || 0,
+        seconds: parseInt(document.getElementById('seconds').value) || 0,
+        specificDate: document.getElementById('specificDate').value,
+        announceWithVoice: document.getElementById('announceWithVoice').checked,
+        minuteAnnouncementTemplate: document.getElementById('minuteAnnouncement').value,
+        finalAnnouncementTemplate: document.getElementById('finalAnnouncement').value
+      };
+      return data;
+    }
+
+    function updateForm(dataObject) {
+      document.getElementById('eventName').value = dataObject.eventName;
+      document.getElementById('days').value = dataObject.days;
+      document.getElementById('hours').value = dataObject.hours;
+      document.getElementById('minutes').value = dataObject.minutes;
+      document.getElementById('seconds').value = dataObject.seconds;
+      document.getElementById('specificDate').value = dataObject.specificDate;
+      document.getElementById('announceWithVoice').checked = dataObject.announceWithVoice;
+      document.getElementById('minuteAnnouncement').value = dataObject.minuteAnnouncementTemplate;
+      document.getElementById('finalAnnouncement').value = dataObject.finalAnnouncementTemplate;
+    }
+  function saveTimer(timerData) {
+      timerData = loadFormData();
+      fetch("https://publish.ip1.cc", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ data: JSON.stringify(timerData) })
+      })
+      .then(response => response.json())
+      .then(r => {
+        if (r.key) {
+          window.location.hash = r.key;
+        }
+      })
+      .catch(error => console.error('Error:', error));
+    }
+
+    function loadTimerDataFromURL() {
+      if (window.location.hash) {
+        const key = window.location.hash.substr(1);
+        fetch(`https://publish.ip1.cc/storage/uploads/${key}.json`)
+          .then(response => response.json())
+          .then(r => {
+            updateForm(r);
+            gridRedraw();
+          })
+          .catch(error => console.error('Error:', error));
+      }
+    }
+  document.addEventListener('DOMContentLoaded', loadTimerDataFromURL);
+  </script>
+</body>
+</html>
